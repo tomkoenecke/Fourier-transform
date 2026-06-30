@@ -128,8 +128,20 @@ def compute_amplitude_bounds_givenfrequency(intsignal, frequency):
     if in_complex_hull(convhull):
         boundC = Interval(0,abs(convhull[ch_max]))
     else:
-        boundC = Interval(abs(convhull[ch_min]),abs(convhull[ch_max]))
+        boundC = Interval(dist_origin_to_hull(convhull),abs(convhull[ch_max]))
     return boundI, boundC, (convhull[ch_min], convhull[ch_max])
+
+def dist_origin_to_hull(chull): # min |z| over the hull = distance to the nearest edge, not the nearest vertex
+    pts = [(c.real, c.imag) for c in chull]
+    dmin = float('inf')
+    for i in range(len(pts)):
+        ax,ay = pts[i]; bx,by = pts[(i+1) % len(pts)]
+        dx,dy = bx-ax, by-ay
+        denom = dx*dx + dy*dy
+        t = 0.0 if denom == 0 else min(1.0, max(0.0, -(ax*dx + ay*dy) / denom))
+        px,py = ax + t*dx, ay + t*dy
+        dmin = min(dmin, (px*px + py*py)**0.5)
+    return dmin
 
 def compute_amplitude_bounds(intervalsignal): 
     N = len(intervalsignal)
