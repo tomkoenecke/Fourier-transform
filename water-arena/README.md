@@ -312,6 +312,26 @@ pip install stable-baselines3 supersuit pettingzoo
 python examples/marl_train_sb3.py --timesteps 500000
 ```
 
+```
+Over 20 held-out worlds (all nodes controlled):
+                          total profit  buyer fill %
+  scripted roster               3353.2          73.5
+  shared PPO (best ckpt)        1685.0          19.2
+```
+
+![MARL learning curve](fig/marl_learning_curve.png)
+
+**Read this as a lesson, not a leaderboard.** The held-out reward peaks early
+(~40k steps) and then *collapses* — the shared policy degenerates toward
+under-ordering. Two forces cause it: **non-stationarity** (each agent's world
+keeps shifting as the other eight learn) and **multi-echelon credit assignment**
+(a node's orders pay off as downstream sales a step later — the Beer-Game
+problem). Even the best checkpoint (kept via early stopping) trails the
+hand-tuned scripted roster: naive parameter-sharing PPO doesn't crack a coupled
+supply chain. Stronger approaches — CTDE algorithms like MAPPO, or reward
+shaping toward service level — are the natural next step; the env is ready for
+them.
+
 ## Layout
 
 ```
