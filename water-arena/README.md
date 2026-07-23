@@ -45,13 +45,12 @@ Every step runs six phases:
 4. **Consumption** — each agent must consume its demand. Every unit consumed
    earns `consumption_value` in cash (you're a utility delivering water to
    end-users); unmet demand incurs a penalty.
-5. **Spoilage** — a fraction of stored water evaporates.
-6. **Accounting** — rewards (change in mark-to-market net worth) are recorded;
+5. **Accounting** — rewards (change in mark-to-market net worth) are recorded;
    agents whose cash goes negative go **bankrupt** and leave.
 
 Because consumption produces value, the economy is **positive-sum** and price
-settles near water's marginal value to buyers — but scarcity, droughts, storage
-limits, and spoilage make *when* and *how much* to trade a real problem.
+settles near water's marginal value to buyers — but scarcity, droughts, and
+storage limits make *when* and *how much* to trade a real problem.
 
 ## Install & run
 
@@ -225,7 +224,7 @@ tests/              market + world + pyramid invariants (pytest)
 ## Tuning the economy
 
 Everything lives in `WorldConfig` — well capacity and spread, drought
-probability, demand, consumption value, spoilage, storage, the bankruptcy rule,
+probability, demand, consumption value, storage, the bankruptcy rule,
 and the seed. Crank `drought_prob` for a harsher world, widen
 `well_capacity_spread` to sharpen the producer/consumer divide, or drop
 `consumption_value` to squeeze margins.

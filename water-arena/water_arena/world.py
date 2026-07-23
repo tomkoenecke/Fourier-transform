@@ -9,8 +9,7 @@ Each step:
    are settled.
 4. **Consumption** -- each agent must consume its demand; any shortfall incurs
    a cash penalty (buying emergency water / going thirsty).
-5. **Spoilage** -- a fraction of stored water evaporates.
-6. **Accounting** -- rewards (change in mark-to-market net worth) are recorded
+5. **Accounting** -- rewards (change in mark-to-market net worth) are recorded
    and bankrupt agents (cash < 0) are removed.
 
 The engine is pure standard library. It is deterministic given a seed.
@@ -44,7 +43,6 @@ class WorldConfig:
     base_demand: float = 5.0  # units each agent must consume per step
     demand_noise: float = 0.15  # relative std-dev of demand
     consumption_value: float = 2.0  # cash earned per unit consumed (utility revenue)
-    spoilage: float = 0.02  # fraction of stored water lost per step
     unmet_penalty: float = 3.0  # extra cash penalty per unit of unmet demand
     initial_price: float = 1.0  # reference price before the first clear
     allow_bankruptcy: bool = True  # remove agents whose cash goes negative
@@ -174,7 +172,6 @@ class World:
             self.price_history.append(result.clearing_price)
 
         self._consume(demands)
-        self._spoil()
         self._settle_bankruptcies()
 
         mark = self.reference_price
@@ -301,12 +298,6 @@ class World:
             if shortfall > _EPS:
                 s.total_shortfall += shortfall
                 s.cash -= cfg.unmet_penalty * shortfall
-
-    def _spoil(self) -> None:
-        factor = 1.0 - self.config.spoilage
-        for s in self.states:
-            if s.alive:
-                s.water *= factor
 
     def _settle_bankruptcies(self) -> None:
         if not self.config.allow_bankruptcy:

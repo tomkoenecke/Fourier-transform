@@ -63,7 +63,6 @@ def test_pipeline_capacity_caps_flow():
         initial_cash=1e6,
         supplier_price_mode="constant",
         supplier_price=1.0,
-        spoilage=0.0,
         holding_cost=0.0,
     )
     topo = build_pyramid(cfg.n_layers, cfg.pipeline_capacity)

@@ -126,7 +126,6 @@ class PyramidConfig:
     initial_cash: float = 100.0
     initial_inventory: float = 8.0
     holding_cost: float = 0.01  # cash per unit of inventory per step
-    spoilage: float = 0.02  # fraction of inventory lost per step
 
     # supplier price process
     supplier_price: float = 1.0
@@ -340,13 +339,12 @@ class PyramidWorld:
         filled, avg_price = self._buyer_purchase(buyer_need)
         self.total_unmet += buyer_need - filled
 
-        # 4. deliveries arrive; apply holding cost and spoilage
+        # 4. deliveries arrive; apply holding cost
         for s in self.states.values():
             if not s.alive:
                 continue
             s.inventory = min(cfg.storage_capacity, s.inventory + s.incoming)
             s.cash -= cfg.holding_cost * s.inventory
-            s.inventory *= 1.0 - cfg.spoilage
             s.total_sold += s.sold_this
             s.total_bought += s.bought_this
             s.last_sold_v = s.sold_this

@@ -32,8 +32,8 @@ def test_determinism_with_seed():
 
 
 def test_cash_water_conservation_in_trade():
-    # A pure buyer and a pure seller; no production/consumption/spoilage so the
-    # only balance change comes from trading -> cash and water are conserved.
+    # A pure buyer and a pure seller; no production or consumption so the only
+    # balance change comes from trading -> cash and water are conserved.
     cfg = WorldConfig(
         n_steps=1,
         well_capacity=0.0,
@@ -41,7 +41,6 @@ def test_cash_water_conservation_in_trade():
         drought_prob=0.0,
         base_demand=0.0,
         demand_noise=0.0,
-        spoilage=0.0,
         initial_cash=100.0,
         initial_water=10.0,
         seed=1,
@@ -64,7 +63,6 @@ def test_storage_capacity_respected():
         production_noise=0.0,
         drought_prob=0.0,
         base_demand=0.0,
-        spoilage=0.0,
         seed=3,
     )
     world = World([NeedsTrader(), RandomAgent(seed=2)], cfg)
@@ -74,7 +72,7 @@ def test_storage_capacity_respected():
 
 
 def test_cannot_sell_more_than_held():
-    cfg = WorldConfig(n_steps=1, well_capacity=0.0, base_demand=0.0, spoilage=0.0, seed=0)
+    cfg = WorldConfig(n_steps=1, well_capacity=0.0, base_demand=0.0, seed=0)
     seller = FixedAgent(price=0.5, quantity=-1000, name="seller")  # oversell attempt
     buyer = FixedAgent(price=1.0, quantity=1000, name="buyer")
     world = World([seller, buyer], cfg)
