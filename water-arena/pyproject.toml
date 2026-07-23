@@ -13,6 +13,7 @@ dependencies = []  # core engine is pure standard library
 
 [project.optional-dependencies]
 rl = ["numpy>=1.19", "gymnasium>=0.28"]
+train = ["stable-baselines3>=2.0", "numpy>=1.19", "gymnasium>=0.28"]
 plot = ["matplotlib>=3.3"]
 dev = ["pytest>=7.0", "numpy>=1.19"]
 

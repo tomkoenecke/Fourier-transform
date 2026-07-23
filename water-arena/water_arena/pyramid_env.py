@@ -25,6 +25,7 @@ Reward: the controlled node's profit this step (its change in cash).
 from __future__ import annotations
 
 import math
+import random
 from typing import Dict, Optional
 
 from .pyramid import PyramidConfig, PyramidWorld, SupplyAction, SupplyAgent, SupplyObservation, build_pyramid
@@ -94,6 +95,7 @@ class PyramidTradingEnv(_Base):
         self.markup_cap = markup_cap
         self._seat = _LearnerSeat(self)
         self._world: Optional[PyramidWorld] = None
+        self._seed_rng = random.Random(self._config.seed)
 
         if _HAS_GYM:
             self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(ACT_DIM,), dtype=np.float32)
@@ -106,7 +108,13 @@ class PyramidTradingEnv(_Base):
     # -- Gym API ------------------------------------------------------- #
     def reset(self, *, seed: Optional[int] = None, options=None):
         if seed is not None:
+            # explicit seed -> exact, reproducible episode (tests, evaluation)
             self._config.seed = seed
+            self._seed_rng = random.Random(seed)
+        else:
+            # auto-reset -> a fresh world each episode so training sees variety
+            # (reproducible: the stream is anchored by the last explicit seed)
+            self._config.seed = self._seed_rng.randrange(1, 2**31 - 1)
         roster: Dict[int, SupplyAgent] = (
             dict(self._opponents) if self._opponents is not None
             else default_supply_roster(self._topo.trader_ids)

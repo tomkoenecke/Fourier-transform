@@ -78,3 +78,30 @@ def test_can_control_a_chosen_node():
     assert env.learner_node == 1
     # layer-1 node is not a bottom node -> WTP feature is zero
     assert obs[6] == 0.0
+
+
+def test_auto_reset_varies_but_is_reproducible():
+    # seed=None auto-resets draw fresh worlds; the stream is anchored by the
+    # last explicit seed, so it's varied yet reproducible.
+    def first_two_after(seed):
+        env = PyramidTradingEnv(config=_cfg())
+        env.reset(seed=seed)
+        s1 = env._config.seed
+        env.reset()  # auto
+        s2 = env._config.seed
+        env.reset()  # auto
+        s3 = env._config.seed
+        return s1, s2, s3
+
+    a = first_two_after(0)
+    b = first_two_after(0)
+    assert a == b  # reproducible given the same anchor seed
+    assert len({a[1], a[2]}) == 2  # consecutive auto-resets differ
+
+
+def test_sb3_env_checker_passes():
+    # Guards against regressions in the Gymnasium contract. Skips if SB3 absent.
+    pytest.importorskip("stable_baselines3")
+    from stable_baselines3.common.env_checker import check_env
+
+    check_env(PyramidTradingEnv(config=_cfg()))

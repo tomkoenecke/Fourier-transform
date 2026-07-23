@@ -261,6 +261,27 @@ obs, reward, terminated, truncated, info = env.step([0.3, 0.5])  # [markup knob,
 - Pick any seat with `learner_node`; the rest run `default_supply_roster`, or pass
   your own `opponents`. `examples/rl_pyramid_rollout.py` runs a random policy and
   compares it to a scripted baseline in the same seat.
+- An explicit `reset(seed=s)` gives an exact, reproducible episode; an auto-reset
+  (`seed=None`, as during training) draws a fresh world each episode so the policy
+  sees variety.
+
+**Train one (Stable-Baselines3).** `examples/rl_train_sb3.py` trains a PPO agent
+and evaluates it against a random policy and a cost-plus baseline in the same seat
+on the same held-out worlds:
+
+```bash
+pip install stable-baselines3          # pulls torch; CPU is fine
+python examples/rl_train_sb3.py --timesteps 60000
+```
+
+```
+Mean episode profit over 30 held-out worlds:
+  random policy       871.75
+  cost-plus baseline  214.49
+  trained PPO        2784.02      # learns to price into the cheapest-first buyer
+```
+
+![PPO learning curve](fig/sb3_learning_curve.png)
 
 ## Layout
 
@@ -274,7 +295,7 @@ water_arena/
   supply_agents.py  scripted trader strategies (basic + advanced) for the pyramid
   pyramid_env.py    Gymnasium-style single-agent RL wrapper (pyramid)
 examples/           tournament, custom agent, RL rollouts, pyramid_run,
-                    advanced_showdown, typical_round
+                    advanced_showdown, typical_round, rl_train_sb3
 tests/              market + world + pyramid + RL-env invariants (pytest)
 ```
 
