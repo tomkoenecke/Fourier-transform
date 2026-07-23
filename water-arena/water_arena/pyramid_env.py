@@ -56,6 +56,61 @@ OBS_DIM = 9
 ACT_DIM = 2
 
 
+# --------------------------------------------------------------------------- #
+# shared observe / decode helpers (used by the single-agent and MARL envs)
+# --------------------------------------------------------------------------- #
+def supplier_price_now(world) -> float:
+    """The supplier's price for the world's current step, without side effects."""
+    cfg = world.config
+    if world._custom_price_fn is not None:
+        return max(0.0, world._custom_price_fn(world.step_count))
+    mode = cfg.supplier_price_mode
+    if mode == "constant":
+        return cfg.supplier_price
+    if mode == "sine":
+        phase = 2 * math.pi * world.step_count / max(1.0, cfg.supplier_price_period)
+        return max(0.05, cfg.supplier_price * (1.0 + cfg.supplier_price_amp * math.sin(phase)))
+    return world._sp  # random_walk: current level
+
+
+def decode_action(obs: SupplyObservation, raw, markup_cap: float) -> SupplyAction:
+    """Map a raw ``[markup_knob, target_stock_knob]`` in [-1,1] to a SupplyAction."""
+    a0, a1 = raw
+    cost = obs.cheapest_parent_price
+    markup = 0.5 * (a0 + 1.0) * markup_cap  # a0 in [-1,1] -> [0, cap]
+    price = max(1e-3, cost * (1.0 + markup))
+    target = 0.5 * (a1 + 1.0) * obs.storage_capacity  # a1 in [-1,1] -> [0, cap]
+    return SupplyAction(sell_price=price, orders=_order_up_to(obs, target))
+
+
+def observe_node(world, nid: int):
+    """Build the 9-dim observation vector for trader node ``nid``."""
+    cfg = world.config
+    topo = world.topology
+    s = world.states[nid]
+    supplier_price = supplier_price_now(world)
+    parent_prices = [
+        supplier_price if p == topo.supplier_id else world.states[p].sell_price
+        for p in topo.parents[nid]
+    ]
+    input_cost = min(parent_prices) if parent_prices else supplier_price
+    is_bottom = 1.0 if nid in topo.bottom_ids else 0.0
+    wtp = cfg.buyer_willingness_to_pay if nid in topo.bottom_ids else 0.0
+    frac = world.step_count / max(1, cfg.n_steps)
+    vec = [
+        s.inventory / cfg.storage_capacity,
+        s.cash / cfg.initial_cash,
+        input_cost,
+        s.sell_price,
+        s.last_sold_v / max(1e-9, cfg.buyer_need),
+        supplier_price,
+        wtp,
+        is_bottom,
+        frac,
+    ]
+    return np.asarray(vec, dtype=np.float32)
+
+
 class _LearnerSeat(SupplyAgent):
     """Occupies the controlled node. Its action is injected by the env; it
     decodes the raw policy output against the *true* current observation the
@@ -137,58 +192,13 @@ class PyramidTradingEnv(_Base):
         if self._world is not None:
             print(self._world.summary())
 
-    # -- action decoding ---------------------------------------------- #
+    # -- action decoding & observation (delegate to shared helpers) ---- #
     def _decode(self, obs: SupplyObservation, raw) -> SupplyAction:
-        a0, a1 = raw
-        cost = obs.cheapest_parent_price
-        markup = 0.5 * (a0 + 1.0) * self.markup_cap  # a0 in [-1,1] -> [0, cap]
-        price = max(1e-3, cost * (1.0 + markup))
-        target = 0.5 * (a1 + 1.0) * obs.storage_capacity  # a1 in [-1,1] -> [0, cap]
-        return SupplyAction(sell_price=price, orders=_order_up_to(obs, target))
-
-    # -- observation -------------------------------------------------- #
-    def _supplier_price_now(self) -> float:
-        w = self._world
-        cfg = w.config
-        if w._custom_price_fn is not None:
-            return max(0.0, w._custom_price_fn(w.step_count))
-        mode = cfg.supplier_price_mode
-        if mode == "constant":
-            return cfg.supplier_price
-        if mode == "sine":
-            phase = 2 * math.pi * w.step_count / max(1.0, cfg.supplier_price_period)
-            return max(0.05, cfg.supplier_price * (1.0 + cfg.supplier_price_amp * math.sin(phase)))
-        return w._sp  # random_walk: current level
+        return decode_action(obs, raw, self.markup_cap)
 
     def _observe(self):
-        w = self._world
-        assert w is not None
-        cfg = w.config
-        topo = self._topo
-        nid = self.learner_node
-        s = w.states[nid]
-        supplier_price = self._supplier_price_now()
-        # input cost = cheapest current parent price (supplier price if fed by apex)
-        parent_prices = [
-            supplier_price if p == topo.supplier_id else w.states[p].sell_price
-            for p in topo.parents[nid]
-        ]
-        input_cost = min(parent_prices) if parent_prices else supplier_price
-        is_bottom = 1.0 if nid in topo.bottom_ids else 0.0
-        wtp = cfg.buyer_willingness_to_pay if nid in topo.bottom_ids else 0.0
-        frac = w.step_count / max(1, cfg.n_steps)
-        vec = [
-            s.inventory / cfg.storage_capacity,
-            s.cash / cfg.initial_cash,
-            input_cost,
-            s.sell_price,
-            s.last_sold_v / max(1e-9, cfg.buyer_need),
-            supplier_price,
-            wtp,
-            is_bottom,
-            frac,
-        ]
-        return np.asarray(vec, dtype=np.float32)
+        assert self._world is not None
+        return observe_node(self._world, self.learner_node)
 
 
 class _Box:

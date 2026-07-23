@@ -283,6 +283,35 @@ Mean episode profit over 30 held-out worlds:
 
 ![PPO learning curve](fig/sb3_learning_curve.png)
 
+### Multi-agent (every node learns at once)
+
+`PyramidParallelEnv` is a [PettingZoo](https://pettingzoo.farama.org/)
+`ParallelEnv` where **each trader node is an agent**: on every step all nodes
+act simultaneously, the chain clears, and each gets its own observation and its
+own profit as reward. Same per-node obs/action layout as the single-agent env,
+so a parameter-sharing policy is natural. It passes PettingZoo's
+`parallel_api_test`.
+
+```python
+from water_arena.pyramid_marl import PyramidParallelEnv
+env = PyramidParallelEnv()
+obs, infos = env.reset(seed=0)                     # obs is {agent: vector}
+actions = {a: env.action_space(a).sample() for a in env.agents}
+obs, rewards, terms, truncs, infos = env.step(actions)
+```
+
+`examples/marl_rollout.py` runs a random joint policy; `examples/marl_train_sb3.py`
+trains one **shared** PPO policy over all nine nodes via SuperSuit and compares it
+to the scripted roster on held-out worlds (total trader profit and buyer fill
+rate). This is a genuinely harder problem than the single-agent case — the agents
+are coupled through prices and pipelines, so coordination (not just optimisation)
+is the challenge.
+
+```bash
+pip install stable-baselines3 supersuit pettingzoo
+python examples/marl_train_sb3.py --timesteps 500000
+```
+
 ## Layout
 
 ```
@@ -294,9 +323,11 @@ water_arena/
   pyramid.py        pyramid topology + supply-chain simulation + buyer
   supply_agents.py  scripted trader strategies (basic + advanced) for the pyramid
   pyramid_env.py    Gymnasium-style single-agent RL wrapper (pyramid)
+  pyramid_marl.py   PettingZoo ParallelEnv — every node a learning agent
 examples/           tournament, custom agent, RL rollouts, pyramid_run,
-                    advanced_showdown, typical_round, rl_train_sb3
-tests/              market + world + pyramid + RL-env invariants (pytest)
+                    advanced_showdown, typical_round, rl_train_sb3,
+                    marl_rollout, marl_train_sb3
+tests/              market + world + pyramid + RL-env + MARL invariants (pytest)
 ```
 
 ## Tuning the economy
