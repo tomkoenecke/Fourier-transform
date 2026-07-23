@@ -238,6 +238,30 @@ strategy in the same position rather than comparing absolute profit.)
 it. Margins stack multiplicatively down the chain — with every node on a +25 %
 cost-plus rule you get a clean `1 → 1.25 → 1.56 → 1.95×` cascade.
 
+### Reinforcement learning (pyramid)
+
+`PyramidTradingEnv` wraps the supply chain as a single-agent Gymnasium env — you
+control **one trader node**, scripted strategies fill the rest:
+
+```python
+from water_arena.pyramid_env import PyramidTradingEnv
+from water_arena.pyramid import PyramidConfig
+
+env = PyramidTradingEnv(config=PyramidConfig(n_layers=3), learner_node=None)  # default: interior bottom node
+obs, _ = env.reset(seed=0)
+obs, reward, terminated, truncated, info = env.step([0.3, 0.5])  # [markup knob, target-stock knob]
+```
+
+- **Action** `[a0, a1]` in `[-1, 1]`: `a0` sets the markup over input cost
+  (`0 … markup_cap`); `a1` sets a target inventory (`0 … storage`) that's ordered
+  cheapest-parent-first within pipeline/cash limits.
+- **Observation** (9-vector): inventory, cash, input cost, last sell price, last
+  sold (demand), supplier price, buyer WTP, is-bottom flag, episode progress.
+- **Reward**: the node's profit that step (its change in cash).
+- Pick any seat with `learner_node`; the rest run `default_supply_roster`, or pass
+  your own `opponents`. `examples/rl_pyramid_rollout.py` runs a random policy and
+  compares it to a scripted baseline in the same seat.
+
 ## Layout
 
 ```
@@ -247,9 +271,11 @@ water_arena/
   world.py          flat-arena World: production, trade, consumption
   env.py            Gymnasium-style single-agent RL wrapper (flat arena)
   pyramid.py        pyramid topology + supply-chain simulation + buyer
-  supply_agents.py  scripted trader strategies for the pyramid
-examples/           tournament, custom agent, RL rollout, pyramid_run
-tests/              market + world + pyramid invariants (pytest)
+  supply_agents.py  scripted trader strategies (basic + advanced) for the pyramid
+  pyramid_env.py    Gymnasium-style single-agent RL wrapper (pyramid)
+examples/           tournament, custom agent, RL rollouts, pyramid_run,
+                    advanced_showdown, typical_round
+tests/              market + world + pyramid + RL-env invariants (pytest)
 ```
 
 ## Tuning the economy
