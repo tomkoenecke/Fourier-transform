@@ -17,13 +17,15 @@ from water_arena.supply_agents import default_supply_roster
 
 def main() -> None:
     config = PyramidConfig(n_layers=3, n_steps=300, seed=7)
-    topo = build_pyramid(config.n_layers, config.pipeline_capacity)
+    topo = build_pyramid(config.n_layers, config.pipeline_capacity, config.wrap)
     world = PyramidWorld(default_supply_roster(topo.trader_ids), config)
 
     print(_describe_topology(world))
     print()
     world.run(verbose=False)
     print(world.summary())
+    print()
+    print(world.price_cascade_str())
     _maybe_plot(world)
 
 

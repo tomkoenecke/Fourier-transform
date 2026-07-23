@@ -221,6 +221,27 @@ auction** among bottom sellers (reuse `water_arena.market.clear_market`),
 price rises), or **contracts** (a buyer commits to a seller for N steps). Say the
 word and I'll wire one in.
 
+### Position matters (and how to neutralise it)
+
+Node *i* feeds children *i* and *i+1*, so a **corner** trader has only one parent
+pipeline — half the inflow of an interior node, no choice of supplier, and a
+single point of failure. With identical agents on every node, interior traders
+out-earn corners by ~70%, and the gap compounds down the edges.
+
+`PyramidConfig(wrap=True)` closes each layer into a **ring** so every trader
+(from layer 2 down) has two parents. Note it can't fully equalise a *growing*
+pyramid: the two extra edges give the corner parents a third child, so the
+disadvantage shifts from the corners (inflow) toward the middle (fewer outlets)
+— it raises the floor rather than flattening everything. A perfectly uniform
+board needs constant-width layers (a true cylinder); ask and I'll add that too.
+
+### Prices along the chain
+
+`world.price_cascade()` returns the volume-weighted average price at each stage
+(supplier → each layer → what the buyer pays); `world.price_cascade_str()` prints
+it. Margins stack multiplicatively down the chain — with every node on a +25 %
+cost-plus rule you get a clean `1 → 1.25 → 1.56 → 1.95×` cascade.
+
 ## Layout
 
 ```

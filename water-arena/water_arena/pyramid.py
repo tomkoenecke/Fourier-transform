@@ -54,8 +54,14 @@ class Topology:
         return f"L{self.layer_of[node_id]}#{self.pos[node_id]}"
 
 
-def build_pyramid(n_layers: int, pipeline_capacity: float) -> Topology:
-    """Build a pyramid with ``n_layers`` trader layers of sizes 2, 3, ..., n+1."""
+def build_pyramid(n_layers: int, pipeline_capacity: float, wrap: bool = False) -> Topology:
+    """Build a pyramid with ``n_layers`` trader layers of sizes 2, 3, ..., n+1.
+
+    With ``wrap=True`` each layer is closed into a ring: the two end nodes of a
+    layer also feed the opposite-end child of the layer below, so *every* trader
+    (from layer 2 down) has exactly two parents. This removes the edge
+    disadvantage -- a single-pipeline corner node with half the inflow -- at the
+    cost of the strict triangle shape (corner nodes gain a third child)."""
     if n_layers < 1:
         raise ValueError("need at least one trader layer")
 
@@ -79,13 +85,23 @@ def build_pyramid(n_layers: int, pipeline_capacity: float) -> Topology:
     parents[buyer_id] = []
     children[buyer_id] = []
 
+    def _connect(src: int, dst: int) -> None:
+        if (src, dst) in capacity:
+            return  # avoid duplicate edges (small layers)
+        children[src].append(dst)
+        parents[dst].append(src)
+        capacity[(src, dst)] = pipeline_capacity
+
     # node i in layer L feeds children i and i+1 in layer L+1
     for L in range(0, n_layers):
         for i, nid in enumerate(layers[L]):
-            for child in (layers[L + 1][i], layers[L + 1][i + 1]):
-                children[nid].append(child)
-                parents[child].append(nid)
-                capacity[(nid, child)] = pipeline_capacity
+            _connect(nid, layers[L + 1][i])
+            _connect(nid, layers[L + 1][i + 1])
+        if wrap and len(layers[L]) >= 2:
+            # close the ring: each end node also feeds the far-end child below,
+            # giving the two corner children of layer L+1 a second parent
+            _connect(layers[L][-1], layers[L + 1][0])
+            _connect(layers[L][0], layers[L + 1][-1])
 
     # bottom trader layer feeds the buyer
     bottom_ids = list(layers[n_layers])
@@ -120,6 +136,7 @@ class PyramidConfig:
 
     n_layers: int = 3  # trader layers below the supplier (sizes 2, 3, 4, ...)
     n_steps: int = 300
+    wrap: bool = False  # close each layer into a ring (removes edge disadvantage)
 
     pipeline_capacity: float = 8.0  # max flow per pipeline per step
     storage_capacity: float = 30.0
@@ -260,7 +277,9 @@ class PyramidWorld:
         supplier_price_fn: Optional[Callable[[int], float]] = None,
     ):
         self.config = config or PyramidConfig()
-        self.topology = build_pyramid(self.config.n_layers, self.config.pipeline_capacity)
+        self.topology = build_pyramid(
+            self.config.n_layers, self.config.pipeline_capacity, self.config.wrap
+        )
         missing = set(self.topology.trader_ids) - set(agents)
         if missing:
             raise ValueError(f"no agent supplied for trader nodes {sorted(missing)}")
@@ -282,6 +301,12 @@ class PyramidWorld:
         self.step_count = 0
         self.history = []
         self.total_unmet = 0.0
+        # volume-weighted price accumulators (for price_cascade)
+        self._price_num = {nid: 0.0 for nid in self.topology.trader_ids}
+        self._price_vol = {nid: 0.0 for nid in self.topology.trader_ids}
+        self._supplier_price_sum = 0.0
+        self._buyer_price_num = 0.0
+        self._buyer_vol = 0.0
         self.states = {}
         for nid in self.topology.trader_ids:
             self.states[nid] = NodeState(
@@ -339,6 +364,12 @@ class PyramidWorld:
         filled, avg_price = self._buyer_purchase(buyer_need)
         self.total_unmet += buyer_need - filled
 
+        # price-cascade accumulators (volume-weighted)
+        self._supplier_price_sum += supplier_price
+        if avg_price is not None:
+            self._buyer_price_num += avg_price * filled
+            self._buyer_vol += filled
+
         # 4. deliveries arrive; apply holding cost
         for s in self.states.values():
             if not s.alive:
@@ -349,6 +380,8 @@ class PyramidWorld:
             s.total_bought += s.bought_this
             s.last_sold_v = s.sold_this
             s.last_bought_v = s.bought_this
+            self._price_num[s.node_id] += s.sell_price * s.sold_this
+            self._price_vol[s.node_id] += s.sold_this
 
         # 5. bankruptcy
         if cfg.allow_bankruptcy:
@@ -520,6 +553,48 @@ class PyramidWorld:
     # ------------------------------------------------------------------ #
     # reporting
     # ------------------------------------------------------------------ #
+    def price_cascade(self) -> Dict[str, object]:
+        """Volume-weighted average price at each stage of the chain, from the
+        supplier down to what the buyer actually pays.
+
+        Returns ``{"supplier": float, "layers": [p1, p2, ...], "buyer": float}``
+        where ``layers[k]`` is the mean price at which trader layer ``k+1`` sold,
+        weighted by volume. Run the episode first.
+        """
+        topo = self.topology
+        n = max(1, self.step_count)
+        supplier = self._supplier_price_sum / n
+        layers: List[Optional[float]] = []
+        for L in range(1, topo.n_layers + 1):
+            num = sum(self._price_num[nid] for nid in topo.layers[L])
+            vol = sum(self._price_vol[nid] for nid in topo.layers[L])
+            layers.append(num / vol if vol > _EPS else None)
+        buyer = self._buyer_price_num / self._buyer_vol if self._buyer_vol > _EPS else None
+        return {"supplier": supplier, "layers": layers, "buyer": buyer}
+
+    def price_cascade_str(self) -> str:
+        """A human-readable table of :meth:`price_cascade`."""
+        c = self.price_cascade()
+        sup = c["supplier"]
+        lines = [
+            "Price cascade (volume-weighted avg along the chain):",
+            f"  {'stage':<14}{'price':>8}{'x supplier':>12}{'vs prev':>10}",
+            f"  {'Supplier':<14}{sup:>8.3f}{1.0:>12.2f}{'':>10}",
+        ]
+        prev = sup
+        for i, p in enumerate(c["layers"], start=1):
+            if p is None:
+                lines.append(f"  {'Layer '+str(i):<14}{'  -  ':>8}")
+                continue
+            step = f"{(p / prev - 1) * 100:+.0f}%" if prev else ""
+            lines.append(f"  {'Layer '+str(i):<14}{p:>8.3f}{p / sup:>12.2f}{step:>10}")
+            prev = p
+        b = c["buyer"]
+        if b is not None:
+            step = f"{(b / prev - 1) * 100:+.0f}%" if prev else ""
+            lines.append(f"  {'Buyer (paid)':<14}{b:>8.3f}{b / sup:>12.2f}{step:>10}")
+        return "\n".join(lines)
+
     def leaderboard(self) -> List[NodeState]:
         return sorted(
             self.states.values(),
