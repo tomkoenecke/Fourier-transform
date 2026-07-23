@@ -221,19 +221,15 @@ auction** among bottom sellers (reuse `water_arena.market.clear_market`),
 price rises), or **contracts** (a buyer commits to a seller for N steps). Say the
 word and I'll wire one in.
 
-### Position matters (and how to neutralise it)
+### Position matters
 
 Node *i* feeds children *i* and *i+1*, so a **corner** trader has only one parent
 pipeline — half the inflow of an interior node, no choice of supplier, and a
 single point of failure. With identical agents on every node, interior traders
-out-earn corners by ~70%, and the gap compounds down the edges.
-
-`PyramidConfig(wrap=True)` closes each layer into a **ring** so every trader
-(from layer 2 down) has two parents. Note it can't fully equalise a *growing*
-pyramid: the two extra edges give the corner parents a third child, so the
-disadvantage shifts from the corners (inflow) toward the middle (fewer outlets)
-— it raises the floor rather than flattening everything. A perfectly uniform
-board needs constant-width layers (a true cylinder); ask and I'll add that too.
+out-earn corners by ~70%, and the gap compounds down the edges. This is a real,
+intentional feature of the geography: where you sit in the network is part of
+the problem. (If you want to control for it, evaluate an agent against the same
+strategy in the same position rather than comparing absolute profit.)
 
 ### Prices along the chain
 

@@ -17,7 +17,7 @@ from water_arena.supply_agents import default_supply_roster
 
 def main() -> None:
     config = PyramidConfig(n_layers=3, n_steps=300, seed=7)
-    topo = build_pyramid(config.n_layers, config.pipeline_capacity, config.wrap)
+    topo = build_pyramid(config.n_layers, config.pipeline_capacity)
     world = PyramidWorld(default_supply_roster(topo.trader_ids), config)
 
     print(_describe_topology(world))

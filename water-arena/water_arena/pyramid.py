@@ -54,14 +54,8 @@ class Topology:
         return f"L{self.layer_of[node_id]}#{self.pos[node_id]}"
 
 
-def build_pyramid(n_layers: int, pipeline_capacity: float, wrap: bool = False) -> Topology:
-    """Build a pyramid with ``n_layers`` trader layers of sizes 2, 3, ..., n+1.
-
-    With ``wrap=True`` each layer is closed into a ring: the two end nodes of a
-    layer also feed the opposite-end child of the layer below, so *every* trader
-    (from layer 2 down) has exactly two parents. This removes the edge
-    disadvantage -- a single-pipeline corner node with half the inflow -- at the
-    cost of the strict triangle shape (corner nodes gain a third child)."""
+def build_pyramid(n_layers: int, pipeline_capacity: float) -> Topology:
+    """Build a pyramid with ``n_layers`` trader layers of sizes 2, 3, ..., n+1."""
     if n_layers < 1:
         raise ValueError("need at least one trader layer")
 
@@ -85,23 +79,13 @@ def build_pyramid(n_layers: int, pipeline_capacity: float, wrap: bool = False) -
     parents[buyer_id] = []
     children[buyer_id] = []
 
-    def _connect(src: int, dst: int) -> None:
-        if (src, dst) in capacity:
-            return  # avoid duplicate edges (small layers)
-        children[src].append(dst)
-        parents[dst].append(src)
-        capacity[(src, dst)] = pipeline_capacity
-
     # node i in layer L feeds children i and i+1 in layer L+1
     for L in range(0, n_layers):
         for i, nid in enumerate(layers[L]):
-            _connect(nid, layers[L + 1][i])
-            _connect(nid, layers[L + 1][i + 1])
-        if wrap and len(layers[L]) >= 2:
-            # close the ring: each end node also feeds the far-end child below,
-            # giving the two corner children of layer L+1 a second parent
-            _connect(layers[L][-1], layers[L + 1][0])
-            _connect(layers[L][0], layers[L + 1][-1])
+            for child in (layers[L + 1][i], layers[L + 1][i + 1]):
+                children[nid].append(child)
+                parents[child].append(nid)
+                capacity[(nid, child)] = pipeline_capacity
 
     # bottom trader layer feeds the buyer
     bottom_ids = list(layers[n_layers])
@@ -136,7 +120,6 @@ class PyramidConfig:
 
     n_layers: int = 3  # trader layers below the supplier (sizes 2, 3, 4, ...)
     n_steps: int = 300
-    wrap: bool = False  # close each layer into a ring (removes edge disadvantage)
 
     pipeline_capacity: float = 8.0  # max flow per pipeline per step
     storage_capacity: float = 30.0
@@ -277,9 +260,7 @@ class PyramidWorld:
         supplier_price_fn: Optional[Callable[[int], float]] = None,
     ):
         self.config = config or PyramidConfig()
-        self.topology = build_pyramid(
-            self.config.n_layers, self.config.pipeline_capacity, self.config.wrap
-        )
+        self.topology = build_pyramid(self.config.n_layers, self.config.pipeline_capacity)
         missing = set(self.topology.trader_ids) - set(agents)
         if missing:
             raise ValueError(f"no agent supplied for trader nodes {sorted(missing)}")

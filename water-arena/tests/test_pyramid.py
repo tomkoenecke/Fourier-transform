@@ -39,37 +39,6 @@ def test_middle_child_is_shared():
     assert len(topo.parents[layer2[2]]) == 1
 
 
-def test_wrap_gives_every_trader_two_parents():
-    topo = build_pyramid(n_layers=3, pipeline_capacity=8.0, wrap=True)
-    # layer 1 nodes still have the single supplier as their only parent
-    for nid in topo.layers[1]:
-        assert len(topo.parents[nid]) == 1
-    # every trader in layers 2+ now has exactly two parents (no edge nodes)
-    for L in range(2, topo.n_layers + 1):
-        for nid in topo.layers[L]:
-            assert len(topo.parents[nid]) == 2, topo.label(nid)
-    # corner parents pick up a third child; the shape is no longer a triangle
-    corner = topo.layers[2][0]
-    assert len(topo.children[corner]) == 3
-
-
-def test_wrap_raises_the_floor_for_the_worst_position():
-    # Wrap can't fully equalize a growing pyramid, but by giving every corner a
-    # second parent it lifts the worst-off node's profit above the un-wrapped
-    # single-pipeline corner.
-    from water_arena.supply_agents import CostPlusTrader
-
-    def min_profit(wrap):
-        cfg = PyramidConfig(n_layers=3, n_steps=2000, seed=1, wrap=wrap)
-        topo = build_pyramid(cfg.n_layers, cfg.pipeline_capacity, cfg.wrap)
-        roster = {nid: CostPlusTrader(name=topo.label(nid)) for nid in topo.trader_ids}
-        w = PyramidWorld(roster, cfg)
-        w.run()
-        return min(w.states[n].total_profit for n in topo.trader_ids)
-
-    assert min_profit(wrap=True) > min_profit(wrap=False)
-
-
 def test_supplier_feeds_two():
     topo = build_pyramid(n_layers=3, pipeline_capacity=8.0)
     assert len(topo.children[topo.supplier_id]) == 2
