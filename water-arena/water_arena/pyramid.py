@@ -245,6 +245,9 @@ class PyramidStep:
     inventory: Dict[int, float]
     cash: Dict[int, float]
     profit: Dict[int, float]
+    sell_price: Dict[int, float] = field(default_factory=dict)  # per-node price this step
+    sold: Dict[int, float] = field(default_factory=dict)  # per-node units sold this step (outflow)
+    bought: Dict[int, float] = field(default_factory=dict)  # per-node units received (inflow)
 
 
 # --------------------------------------------------------------------------- #
@@ -386,6 +389,9 @@ class PyramidWorld:
             inventory={nid: s.inventory for nid, s in self.states.items()},
             cash={nid: s.cash for nid, s in self.states.items()},
             profit=profit,
+            sell_price={nid: s.sell_price for nid, s in self.states.items()},
+            sold={nid: s.sold_this for nid, s in self.states.items()},
+            bought={nid: s.bought_this for nid, s in self.states.items()},
         )
         self.history.append(info)
         return info
