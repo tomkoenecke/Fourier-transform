@@ -12,7 +12,12 @@ from water_arena.pyramid import (
     SupplyAgent,
     build_pyramid,
 )
-from water_arena.supply_agents import CostPlusTrader, default_supply_roster
+from water_arena.supply_agents import (
+    BanditPricer,
+    CostPlusTrader,
+    advanced_supply_roster,
+    default_supply_roster,
+)
 
 
 def test_topology_shape():
@@ -87,6 +92,41 @@ def test_no_negative_inventory_or_cash_conservation():
     world.run()
     for s in world.states.values():
         assert s.inventory >= -1e-9
+
+
+def test_advanced_roster_runs_and_is_deterministic():
+    cfg = PyramidConfig(n_layers=3, n_steps=100, seed=9)
+    topo = build_pyramid(cfg.n_layers, cfg.pipeline_capacity)
+    a = PyramidWorld(advanced_supply_roster(topo.trader_ids), cfg)
+    a.run()
+    b = PyramidWorld(advanced_supply_roster(topo.trader_ids), PyramidConfig(n_layers=3, n_steps=100, seed=9))
+    b.run()
+    assert [a.states[n].total_profit for n in topo.trader_ids] == [
+        b.states[n].total_profit for n in topo.trader_ids
+    ]
+    # the chain should still serve a meaningful fraction of demand
+    served = sum(h.buyer_filled for h in a.history)
+    needed = sum(h.buyer_need for h in a.history)
+    assert served > 0.4 * needed
+
+
+def test_bandit_learns_to_price_below_wtp():
+    # A lone bottom bandit facing a cheapest-first buyer should learn to price
+    # at or below willingness-to-pay often enough to make real sales.
+    cfg = PyramidConfig(
+        n_layers=1,
+        n_steps=400,
+        buyer_willingness_to_pay=2.5,
+        supplier_price=1.0,
+        supplier_price_mode="constant",
+        seed=0,
+    )
+    topo = build_pyramid(cfg.n_layers, cfg.pipeline_capacity)
+    roster = {nid: BanditPricer(name=f"b{nid}", seed=nid) for nid in topo.trader_ids}
+    world = PyramidWorld(roster, cfg)
+    world.run()
+    served = sum(h.buyer_filled for h in world.history)
+    assert served > 0  # it discovered profitable, sub-WTP pricing
 
 
 def test_buyer_respects_willingness_to_pay():

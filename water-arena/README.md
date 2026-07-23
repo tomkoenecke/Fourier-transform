@@ -195,8 +195,22 @@ print(world.summary())
 The `SupplyObservation` gives you `inventory`, `cash`, `storage_headroom`,
 `last_sold` (your demand signal), `supplier_price`, your parents' `parent_prices`
 and `parent_capacities`, your `child_capacities`, and — for bottom nodes — the
-buyer's `buyer_willingness_to_pay`. Built-in strategies: `CostPlusTrader`,
-`Discounter`, `Monopolist`, `Speculator`, `RandomTrader`.
+buyer's `buyer_willingness_to_pay`.
+
+**Built-in strategies.** Basic — `CostPlusTrader`, `Discounter`, `Monopolist`,
+`Speculator`, `RandomTrader`. Advanced:
+
+| strategy | idea |
+|---|---|
+| `EWMAReplenisher` | forecast demand (EWMA) + smoothed base-stock ordering — damps the bullwhip effect |
+| `AdaptivePricer` | feedback controller: raises margin when it sells through, cuts it when stock piles up |
+| `InventoryAwarePricer` | surge pricing off its own stock — premium when scarce, discount when full |
+| `JustInTimeTrader` | lean: near-zero inventory, thin margin, minimal holding cost (stocks out on spikes) |
+| `BanditPricer` | epsilon-greedy multi-armed bandit over markups, learning online from realised profit |
+
+`default_supply_roster` mixes all of them across the nodes; `advanced_supply_roster`
+pits only the advanced ones head-to-head. The `BanditPricer` is a handy baseline
+for RL: a policy that can't beat a bandit hasn't learned much.
 
 ### Other ways the bottom could sell
 

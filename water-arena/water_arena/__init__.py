@@ -39,11 +39,17 @@ from .pyramid import (
     build_pyramid,
 )
 from .supply_agents import (
+    AdaptivePricer,
+    BanditPricer,
     CostPlusTrader,
     Discounter,
+    EWMAReplenisher,
+    InventoryAwarePricer,
+    JustInTimeTrader,
     Monopolist,
     RandomTrader,
     Speculator,
+    advanced_supply_roster,
     default_supply_roster,
 )
 from .world import AgentState, StepInfo, World, WorldConfig
@@ -85,5 +91,11 @@ __all__ = [
     "Monopolist",
     "RandomTrader",
     "Speculator",
+    "AdaptivePricer",
+    "BanditPricer",
+    "EWMAReplenisher",
+    "InventoryAwarePricer",
+    "JustInTimeTrader",
+    "advanced_supply_roster",
     "default_supply_roster",
 ]
