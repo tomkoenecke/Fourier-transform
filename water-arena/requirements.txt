@@ -1,0 +1,6 @@
+# The core engine (water_arena.market, .agents, .world) needs nothing but the
+# Python standard library. These are all optional:
+numpy>=1.19        # required for the RL env (water_arena.env)
+gymnasium>=0.28    # makes WaterTradingEnv a true gym.Env (optional)
+matplotlib>=3.3    # draws the tournament chart (optional)
+pytest>=7.0        # runs the test suite (optional)

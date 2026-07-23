@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "water-arena"
+version = "0.1.0"
+description = "A small water-economy simulation arena for RL and scripted strategies"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+dependencies = []  # core engine is pure standard library
+
+[project.optional-dependencies]
+rl = ["numpy>=1.19", "gymnasium>=0.28"]
+plot = ["matplotlib>=3.3"]
+dev = ["pytest>=7.0", "numpy>=1.19"]
+
+[tool.setuptools.packages.find]
+include = ["water_arena*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
