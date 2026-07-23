@@ -1,9 +1,14 @@
 # 💧 Water Arena
 
 A small economy-simulation arena for reinforcement-learning and scripted
-strategies. **Water is the only traded good.** Agents own wells that produce
-water, must consume water every step to earn revenue, and trade their
-surpluses and deficits in a single-price call auction.
+strategies. **Water is the only traded good.** It ships with two models:
+
+- **Flat market** — agents own wells, consume water to earn revenue, and trade
+  surpluses/deficits in a single-price call auction. *(jump to
+  [Pyramid supply chain](#pyramid-supply-chain-the-network-model) for the other.)*
+- **Pyramid supply chain** — water flows down a Pascal's-triangle network from a
+  single supplier through capacity-limited pipelines and reseller middlemen to a
+  final buyer that shops cheapest-first.
 
 It's deliberately compact and dependency-light (the core engine is pure
 standard library) so you can read the whole thing in an afternoon, drop in your
@@ -118,16 +123,103 @@ It follows the standard `reset`/`step` contract, so Stable-Baselines3, RLlib,
 CleanRL, etc. plug in directly. If `gymnasium` isn't installed it still runs
 with the same signatures and lightweight fallback spaces.
 
+## Pyramid supply chain (the network model)
+
+The flat arena above is a single spot market. The **pyramid** model
+(`water_arena.pyramid`) is a different beast: water flows *down a network*
+shaped like Pascal's triangle.
+
+```
+              Supplier            layer 0  (posts a price)
+             /        \
+          L1#0        L1#1        layer 1  (2 traders)
+         /    \      /    \
+      L2#0    L2#1(shared) L2#2   layer 2  (3 traders)
+      ...  each node feeds children i and i+1; the middle child is shared ...
+               |
+             Buyer                fills a need cheapest-first, up to a WTP cap
+```
+
+- A single **supplier** at the apex posts a price (constant, sine, or random
+  walk) and has effectively unlimited water.
+- Below it, trader layers grow **2, 3, 4, …** (`n_layers`, default 3). Node *i*
+  in a layer feeds children *i* and *i+1* below, so adjacent traders **share the
+  middle child**. Every edge is a **pipeline with a maximum flow rate**.
+- Each **trader** is a middleman with inventory + cash. Each step it posts a
+  **sell price** to its children and **orders** replenishment from its parent(s)
+  — bounded by pipeline capacity, cash, and storage. Purchases arrive with a
+  **one-step lead time**, so stocking and pricing under uncertainty is the core
+  decision (this is what drives the bullwhip effect you'll see in the charts).
+- At the bottom, a single **buyer** fills a per-step **need** by taking the
+  **cheapest** water on offer first, up to a **willingness-to-pay** cap. That
+  price competition propagates scarcity signals back up the pyramid.
+
+```bash
+python examples/pyramid_run.py     # tournament on the pyramid + chart
+```
+
+![pyramid run](fig/pyramid.png)
+
+Prices amplify and stack as they flow down (supplier ~0.65–1.35 → buyer
+~1.0–3.5), fill rate dips mark scarcity events, and inventories saw-tooth from
+base-stock ordering.
+
+### Writing a trader
+
+Subclass `SupplyAgent`; return a `SupplyAction` — a sell price plus a
+`{parent_id: quantity}` order map:
+
+```python
+from water_arena import SupplyAgent, SupplyAction, PyramidWorld, PyramidConfig
+from water_arena import build_pyramid, default_supply_roster
+
+class ThinMargin(SupplyAgent):
+    def act(self, obs):
+        cost = obs.cheapest_parent_price
+        price = cost * 1.05                      # undercut to win the buyer
+        # order up to ~3 steps of recent demand from the cheapest parent
+        target = 3 * max(obs.last_sold, 2.0)
+        deficit = max(0.0, target - obs.inventory)
+        cheapest = min(obs.parent_prices, key=obs.parent_prices.get)
+        cap = obs.parent_capacities[cheapest]
+        return SupplyAction(sell_price=price, orders={cheapest: min(deficit, cap)})
+
+cfg = PyramidConfig(n_layers=3, seed=0)
+topo = build_pyramid(cfg.n_layers, cfg.pipeline_capacity)
+roster = default_supply_roster(topo.trader_ids)
+roster[topo.bottom_ids[0]] = ThinMargin(name="Me")   # take over one bottom node
+world = PyramidWorld(roster, cfg)
+world.run()
+print(world.summary())
+```
+
+The `SupplyObservation` gives you `inventory`, `cash`, `storage_headroom`,
+`last_sold` (your demand signal), `supplier_price`, your parents' `parent_prices`
+and `parent_capacities`, your `child_capacities`, and — for bottom nodes — the
+buyer's `buyer_willingness_to_pay`. Built-in strategies: `CostPlusTrader`,
+`Discounter`, `Monopolist`, `Speculator`, `RandomTrader`.
+
+### Other ways the bottom could sell
+
+The cheapest-first buyer is the default because it's simple and creates clean
+price competition, but the interface supports alternatives — a **uniform-price
+auction** among bottom sellers (reuse `water_arena.market.clear_market`),
+**multiple buyers** with different needs/WTP, **elastic demand** (need falls as
+price rises), or **contracts** (a buyer commits to a seller for N steps). Say the
+word and I'll wire one in.
+
 ## Layout
 
 ```
 water_arena/
-  market.py   uniform-price call auction (pure stdlib)
-  agents.py   Agent base class + scripted strategies + Observation/Action
-  world.py    the World simulation: production, trade, consumption, accounting
-  env.py      Gymnasium-style single-agent RL wrapper
-examples/     tournament, custom agent, RL rollout
-tests/        market + world invariants (pytest)
+  market.py         uniform-price call auction (pure stdlib)
+  agents.py         flat-arena Agent base + scripted strategies
+  world.py          flat-arena World: production, trade, consumption
+  env.py            Gymnasium-style single-agent RL wrapper (flat arena)
+  pyramid.py        pyramid topology + supply-chain simulation + buyer
+  supply_agents.py  scripted trader strategies for the pyramid
+examples/           tournament, custom agent, RL rollout, pyramid_run
+tests/              market + world + pyramid invariants (pytest)
 ```
 
 ## Tuning the economy

@@ -27,11 +27,31 @@ from .agents import (
     default_roster,
 )
 from .market import MarketResult, Order, Trade, clear_market
+from .pyramid import (
+    NodeState,
+    PyramidConfig,
+    PyramidStep,
+    PyramidWorld,
+    SupplyAction,
+    SupplyAgent,
+    SupplyObservation,
+    Topology,
+    build_pyramid,
+)
+from .supply_agents import (
+    CostPlusTrader,
+    Discounter,
+    Monopolist,
+    RandomTrader,
+    Speculator,
+    default_supply_roster,
+)
 from .world import AgentState, StepInfo, World, WorldConfig
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
+    # flat market arena
     "Action",
     "Agent",
     "AgentState",
@@ -50,4 +70,20 @@ __all__ = [
     "WorldConfig",
     "clear_market",
     "default_roster",
+    # pyramid supply-chain arena
+    "NodeState",
+    "PyramidConfig",
+    "PyramidStep",
+    "PyramidWorld",
+    "SupplyAction",
+    "SupplyAgent",
+    "SupplyObservation",
+    "Topology",
+    "build_pyramid",
+    "CostPlusTrader",
+    "Discounter",
+    "Monopolist",
+    "RandomTrader",
+    "Speculator",
+    "default_supply_roster",
 ]
